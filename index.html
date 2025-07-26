@@ -1,0 +1,471 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Auth App</title>
+    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/react-router-dom@6.8.1/dist/umd/react-router-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .container {
+            width: 100%;
+            max-width: 400px;
+            padding: 20px;
+        }
+        
+        .card {
+            background: white;
+            border-radius: 12px;
+            padding: 32px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+            backdrop-filter: blur(10px);
+        }
+        
+        .dashboard-card {
+            max-width: 600px;
+            margin: 0 auto;
+        }
+        
+        h1, h2 {
+            text-align: center;
+            margin-bottom: 24px;
+            color: #333;
+        }
+        
+        .form-group {
+            margin-bottom: 20px;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 6px;
+            font-weight: 500;
+            color: #555;
+        }
+        
+        input {
+            width: 100%;
+            padding: 12px 16px;
+            border: 2px solid #e1e5e9;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: border-color 0.3s ease;
+        }
+        
+        input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        
+        .btn {
+            width: 100%;
+            padding: 12px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s ease;
+        }
+        
+        .btn:hover {
+            transform: translateY(-2px);
+        }
+        
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .btn-secondary {
+            background: transparent;
+            color: #667eea;
+            border: 2px solid #667eea;
+            margin-top: 12px;
+        }
+        
+        .btn-secondary:hover {
+            background: #667eea;
+            color: white;
+        }
+        
+        .error {
+            background: #fee;
+            color: #c33;
+            padding: 12px;
+            border-radius: 6px;
+            margin-bottom: 16px;
+            text-align: center;
+        }
+        
+        .success {
+            background: #efe;
+            color: #393;
+            padding: 12px;
+            border-radius: 6px;
+            margin-bottom: 16px;
+            text-align: center;
+        }
+        
+        .toggle-link {
+            text-align: center;
+            margin-top: 20px;
+            color: #667eea;
+            cursor: pointer;
+            text-decoration: underline;
+        }
+        
+        .nav {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 20px 0;
+            border-bottom: 1px solid #eee;
+            margin-bottom: 30px;
+        }
+        
+        .nav h2 {
+            margin: 0;
+        }
+        
+        .user-info {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+        
+        @media (max-width: 480px) {
+            .container {
+                padding: 10px;
+            }
+            
+            .card {
+                padding: 24px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, createContext, useContext } = React;
+        const { BrowserRouter, Routes, Route, Navigate, useNavigate } = ReactRouterDOM;
+
+        // API Configuration
+        const API_BASE_URL = 'https://btechng-backend.onrender.com';
+
+        // Auth Context
+        const AuthContext = createContext();
+
+        const useAuth = () => {
+            const context = useContext(AuthContext);
+            if (!context) {
+                throw new Error('useAuth must be used within an AuthProvider');
+            }
+            return context;
+        };
+
+        const AuthProvider = ({ children }) => {
+            const [user, setUser] = useState(null);
+            const [loading, setLoading] = useState(true);
+
+            useEffect(() => {
+                const token = localStorage.getItem('token');
+                if (token) {
+                    // Verify token with backend
+                    fetch(`${API_BASE_URL}/api/user`, {
+                        headers: {
+                            'Authorization': `Bearer ${token}`
+                        }
+                    })
+                    .then(res => res.json())
+                    .then(data => {
+                        if (data.userId) {
+                            const userData = JSON.parse(localStorage.getItem('user'));
+                            setUser(userData);
+                        } else {
+                            localStorage.removeItem('token');
+                            localStorage.removeItem('user');
+                        }
+                    })
+                    .catch(() => {
+                        localStorage.removeItem('token');
+                        localStorage.removeItem('user');
+                    })
+                    .finally(() => setLoading(false));
+                } else {
+                    setLoading(false);
+                }
+            }, []);
+
+            const login = async (email, password) => {
+                const response = await fetch(`${API_BASE_URL}/api/auth/login`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ email, password }),
+                });
+
+                const data = await response.json();
+                
+                if (response.ok) {
+                    localStorage.setItem('token', data.token);
+                    localStorage.setItem('user', JSON.stringify(data.user));
+                    setUser(data.user);
+                    return { success: true };
+                } else {
+                    return { success: false, error: data.error };
+                }
+            };
+
+            const register = async (email, password) => {
+                const response = await fetch(`${API_BASE_URL}/api/auth/register`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ email, password }),
+                });
+
+                const data = await response.json();
+                
+                if (response.ok) {
+                    return { success: true, message: data.message };
+                } else {
+                    return { success: false, error: data.error };
+                }
+            };
+
+            const logout = () => {
+                localStorage.removeItem('token');
+                localStorage.removeItem('user');
+                setUser(null);
+            };
+
+            const value = {
+                user,
+                login,
+                register,
+                logout,
+                loading
+            };
+
+            return (
+                <AuthContext.Provider value={value}>
+                    {children}
+                </AuthContext.Provider>
+            );
+        };
+
+        // Protected Route Component
+        const ProtectedRoute = ({ children }) => {
+            const { user, loading } = useAuth();
+
+            if (loading) {
+                return <div className="loading">Loading...</div>;
+            }
+
+            return user ? children : <Navigate to="/login" />;
+        };
+
+        // Login Component
+        const Login = () => {
+            const [email, setEmail] = useState('');
+            const [password, setPassword] = useState('');
+            const [error, setError] = useState('');
+            const [loading, setLoading] = useState(false);
+            const [isRegister, setIsRegister] = useState(false);
+            const [success, setSuccess] = useState('');
+            
+            const { login, register, user } = useAuth();
+            const navigate = useNavigate();
+
+            useEffect(() => {
+                if (user) {
+                    navigate('/dashboard');
+                }
+            }, [user, navigate]);
+
+            const handleSubmit = async (e) => {
+                e.preventDefault();
+                setError('');
+                setSuccess('');
+                setLoading(true);
+
+                if (isRegister) {
+                    const result = await register(email, password);
+                    if (result.success) {
+                        setSuccess('Registration successful! Please login.');
+                        setIsRegister(false);
+                        setEmail('');
+                        setPassword('');
+                    } else {
+                        setError(result.error);
+                    }
+                } else {
+                    const result = await login(email, password);
+                    if (result.success) {
+                        navigate('/dashboard');
+                    } else {
+                        setError(result.error);
+                    }
+                }
+                setLoading(false);
+            };
+
+            return (
+                <div className="container">
+                    <div className="card">
+                        <h1>{isRegister ? 'Create Account' : 'Welcome Back'}</h1>
+                        
+                        {error && <div className="error">{error}</div>}
+                        {success && <div className="success">{success}</div>}
+                        
+                        <form onSubmit={handleSubmit}>
+                            <div className="form-group">
+                                <label htmlFor="email">Email</label>
+                                <input
+                                    type="email"
+                                    id="email"
+                                    value={email}
+                                    onChange={(e) => setEmail(e.target.value)}
+                                    required
+                                    placeholder="Enter your email"
+                                />
+                            </div>
+                            
+                            <div className="form-group">
+                                <label htmlFor="password">Password</label>
+                                <input
+                                    type="password"
+                                    id="password"
+                                    value={password}
+                                    onChange={(e) => setPassword(e.target.value)}
+                                    required
+                                    placeholder="Enter your password"
+                                    minLength="6"
+                                />
+                            </div>
+                            
+                            <button 
+                                type="submit" 
+                                className="btn"
+                                disabled={loading}
+                            >
+                                {loading ? 'Please wait...' : (isRegister ? 'Create Account' : 'Sign In')}
+                            </button>
+                        </form>
+                        
+                        <div 
+                            className="toggle-link"
+                            onClick={() => {
+                                setIsRegister(!isRegister);
+                                setError('');
+                                setSuccess('');
+                            }}
+                        >
+                            {isRegister 
+                                ? 'Already have an account? Sign in' 
+                                : "Don't have an account? Create one"
+                            }
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        // Dashboard Component
+        const Dashboard = () => {
+            const { user, logout } = useAuth();
+            const navigate = useNavigate();
+
+            const handleLogout = () => {
+                logout();
+                navigate('/login');
+            };
+
+            return (
+                <div className="container">
+                    <div className="card dashboard-card">
+                        <div className="nav">
+                            <h2>Dashboard</h2>
+                            <button 
+                                onClick={handleLogout}
+                                className="btn btn-secondary"
+                                style={{ width: 'auto', padding: '8px 16px' }}
+                            >
+                                Logout
+                            </button>
+                        </div>
+                        
+                        <div className="user-info">
+                            <h3>Welcome back!</h3>
+                            <p><strong>Email:</strong> {user?.email}</p>
+                            <p><strong>User ID:</strong> {user?.id}</p>
+                        </div>
+                        
+                        <div style={{ textAlign: 'center', color: '#666' }}>
+                            <h3>🎉 You're successfully authenticated!</h3>
+                            <p>This is a protected route that only logged-in users can access.</p>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        // Main App Component
+        const App = () => {
+            return (
+                <BrowserRouter>
+                    <AuthProvider>
+                        <Routes>
+                            <Route path="/login" element={<Login />} />
+                            <Route 
+                                path="/dashboard" 
+                                element={
+                                    <ProtectedRoute>
+                                        <Dashboard />
+                                    </ProtectedRoute>
+                                } 
+                            />
+                            <Route path="/" element={<Navigate to="/dashboard" />} />
+                        </Routes>
+                    </AuthProvider>
+                </BrowserRouter>
+            );
+        };
+
+        // Render the app
+        ReactDOM.render(<App />, document.getElementById('root'));
+    </script>
+</body>
+</html>
